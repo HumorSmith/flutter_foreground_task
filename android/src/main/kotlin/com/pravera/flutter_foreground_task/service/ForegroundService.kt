@@ -1,20 +1,37 @@
 package com.pravera.flutter_foreground_task.service
 
 import android.annotation.SuppressLint
-import android.app.*
-import android.content.*
+import android.app.AlarmManager
+import android.app.Notification
+import android.app.NotificationChannel
+import android.app.NotificationManager
+import android.app.PendingIntent
+import android.app.PendingIntent.FLAG_IMMUTABLE
+import android.app.Service
+import android.app.TaskStackBuilder
+import android.content.BroadcastReceiver
+import android.content.ComponentName
+import android.content.Context
+import android.content.Intent
+import android.content.IntentFilter
 import android.content.pm.PackageManager
 import android.content.pm.ServiceInfo
 import android.graphics.Color
 import android.net.wifi.WifiManager
-import android.os.*
 import android.os.Build
+import android.os.IBinder
+import android.os.PowerManager
 import android.text.Spannable
 import android.text.SpannableString
 import android.text.style.ForegroundColorSpan
 import android.util.Log
 import androidx.core.app.NotificationCompat
-import com.pravera.flutter_foreground_task.models.*
+import com.pravera.flutter_foreground_task.models.ForegroundServiceAction
+import com.pravera.flutter_foreground_task.models.ForegroundServiceStatus
+import com.pravera.flutter_foreground_task.models.ForegroundTaskOptions
+import com.pravera.flutter_foreground_task.models.NotificationButton
+import com.pravera.flutter_foreground_task.models.NotificationIconData
+import com.pravera.flutter_foreground_task.models.NotificationOptions
 import com.pravera.flutter_foreground_task.utils.ForegroundServiceUtils
 import io.flutter.FlutterInjector
 import io.flutter.embedding.engine.FlutterEngine
@@ -23,9 +40,13 @@ import io.flutter.embedding.engine.loader.FlutterLoader
 import io.flutter.plugin.common.MethodCall
 import io.flutter.plugin.common.MethodChannel
 import io.flutter.view.FlutterCallbackInformation
-import kotlinx.coroutines.*
-import java.util.*
-import kotlin.system.exitProcess
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import java.util.Calendar
 
 /**
  * A service class for implementing foreground service.
@@ -594,17 +615,21 @@ class ForegroundService : Service(), MethodChannel.MethodCallHandler {
 					)
 			}
 
-			NotificationButton.ACTIVITY -> {
-				bIntent = Intent().apply {
-					action = notificationButton.action
-				}
-				bPendingIntent = PendingIntent.getActivity(
-					this,
-					index + 1,
-					bIntent,
-					PendingIntent.FLAG_IMMUTABLE
-				)
-			}
+            NotificationButton.ACTIVITY -> {
+                bIntent = Intent().apply {
+                    setPackage(packageName)
+                    action = notificationButton.action
+                }
+                bIntent.flags = Intent.FLAG_ACTIVITY_NEW_TASK
+                bPendingIntent = TaskStackBuilder.create(this).run {
+                    // Add the intent, which inflates the back stack.
+                    addNextIntentWithParentStack(bIntent)
+                    // Get the PendingIntent containing the entire back stack.
+                    getPendingIntent(0,
+                        PendingIntent.FLAG_UPDATE_CURRENT or FLAG_IMMUTABLE
+                    )
+                }
+            }
 
 			else -> {
 				bIntent = Intent(ACTION_NOTIFICATION_BUTTON_PRESSED).apply {

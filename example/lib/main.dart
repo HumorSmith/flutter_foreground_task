@@ -31,15 +31,15 @@ class MyTaskHandler extends TaskHandler {
   // Called every [interval] milliseconds in [ForegroundTaskOptions].
   @override
   void onRepeatEvent(DateTime timestamp, SendPort? sendPort) async {
-    FlutterForegroundTask.updateService(
-      notificationTitle: 'MyTaskHandler',
-      notificationText: 'eventCount: $_eventCount',
-    );
-
-    // Send data to the main isolate.
-    sendPort?.send(_eventCount);
-
-    _eventCount++;
+    // FlutterForegroundTask.updateService(
+    //   notificationTitle: 'MyTaskHandler',
+    //   notificationText: 'eventCount: $_eventCount',
+    // );
+    //
+    // // Send data to the main isolate.
+    // sendPort?.send(_eventCount);
+    //
+    // _eventCount++;
   }
 
   // Called when the notification button on the Android platform is pressed.
@@ -147,8 +147,8 @@ class _ExamplePageState extends State<ExamplePage> {
             id: 'sendButton',
             text: 'Send',
             textColor: Colors.orange,
-            launchType: NotificationButton.UNDEFINE,
-            action: "clipboard"
+            launchType: NotificationButton.ACTIVITY,
+            action: "test_activity"
           ),
           const NotificationButton(
             id: 'testButton',

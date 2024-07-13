@@ -17,6 +17,15 @@
         android:label="flutter_foreground_task_example"
         android:icon="@mipmap/ic_launcher">
         <activity
+            android:exported="true"
+            android:name=".TestActivity"
+            android:launchMode="singleInstance" >
+            <intent-filter>
+                <action android:name="test_activity"/>
+                <category android:name="android.intent.category.DEFAULT" />
+            </intent-filter>
+        </activity>
+        <activity
             android:name=".MainActivity"
             android:launchMode="singleTop"
             android:theme="@style/LaunchTheme"
