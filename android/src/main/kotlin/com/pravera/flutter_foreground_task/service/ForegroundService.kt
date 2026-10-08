@@ -250,14 +250,38 @@ class ForegroundService : Service(), MethodChannel.MethodCallHandler {
                 builder.setForegroundServiceBehavior(Notification.FOREGROUND_SERVICE_IMMEDIATE)
             }
 
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                startForeground(
-                    notificationOptions.id,
-                    builder.build(),
-                    ServiceInfo.FOREGROUND_SERVICE_TYPE_MANIFEST
-                )
-            } else {
-                startForeground(notificationOptions.id, builder.build())
+            // On Android 12+, startForeground() throws
+            // ForegroundServiceStartNotAllowedException (extends
+            // IllegalStateException) when the app is not allowed to start an
+            // FGS from the background — e.g. when the system restarts this
+            // START_STICKY service after the process was killed. Some OEM
+            // ROMs (e.g. ColorOS/HyperOS) can also throw SecurityException
+            // from the FGS type permission check even when the permission is
+            // declared in the manifest. Raising either exception out of
+            // onCreate() crashes the app with "Unable to create service", so
+            // stop the service silently instead.
+            try {
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                    startForeground(
+                        notificationOptions.id,
+                        builder.build(),
+                        ServiceInfo.FOREGROUND_SERVICE_TYPE_MANIFEST
+                    )
+                } else {
+                    startForeground(notificationOptions.id, builder.build())
+                }
+            } catch (e: IllegalStateException) {
+                Log.e(TAG, "startForeground not allowed, stopping service", e)
+                releaseLockMode()
+                isRunningService = false
+                stopSelf()
+                return
+            } catch (e: SecurityException) {
+                Log.e(TAG, "startForeground denied, stopping service", e)
+                releaseLockMode()
+                isRunningService = false
+                stopSelf()
+                return
             }
         } else {
             val builder = NotificationCompat.Builder(this, channelId)
@@ -282,7 +306,22 @@ class ForegroundService : Service(), MethodChannel.MethodCallHandler {
                 builder.addAction(action)
             }
 
-            startForeground(notificationOptions.id, builder.build())
+            // See the comment above for why these exceptions are caught.
+            try {
+                startForeground(notificationOptions.id, builder.build())
+            } catch (e: IllegalStateException) {
+                Log.e(TAG, "startForeground not allowed, stopping service", e)
+                releaseLockMode()
+                isRunningService = false
+                stopSelf()
+                return
+            } catch (e: SecurityException) {
+                Log.e(TAG, "startForeground denied, stopping service", e)
+                releaseLockMode()
+                isRunningService = false
+                stopSelf()
+                return
+            }
         }
 
         releaseLockMode()
