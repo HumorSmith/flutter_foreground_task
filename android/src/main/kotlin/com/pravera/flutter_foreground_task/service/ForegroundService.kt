@@ -549,16 +549,33 @@ class ForegroundService : Service(), MethodChannel.MethodCallHandler {
     }
 
     private fun getPendingIntent(pm: PackageManager): PendingIntent {
-        return if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q
             || ForegroundServiceUtils.canDrawOverlays(applicationContext)
         ) {
             val pressedIntent = Intent(ACTION_NOTIFICATION_PRESSED).apply {
                 setPackage(packageName)
             }
-            PendingIntent.getBroadcast(this, 200, pressedIntent, PendingIntent.FLAG_IMMUTABLE)
-        } else {
-            val launchIntent = pm.getLaunchIntentForPackage(applicationContext.packageName)
+            return PendingIntent.getBroadcast(this, 200, pressedIntent, PendingIntent.FLAG_IMMUTABLE)
+        }
+
+        // Some OEM ROMs return a launch intent whose activity name is null, which
+        // makes getLaunchIntentForPackage() itself throw a NullPointerException
+        // (ComponentName requires a non-null class name). Raising that from
+        // onCreate() crashes the whole app with "Unable to create service", so
+        // fall back to the broadcast intent used for the overlay-permission case.
+        val launchIntent = try {
+            pm.getLaunchIntentForPackage(applicationContext.packageName)
+        } catch (e: Exception) {
+            Log.e(TAG, "getLaunchIntentForPackage", e)
+            null
+        }
+        return if (launchIntent != null) {
             PendingIntent.getActivity(this, 200, launchIntent, PendingIntent.FLAG_IMMUTABLE)
+        } else {
+            val pressedIntent = Intent(ACTION_NOTIFICATION_PRESSED).apply {
+                setPackage(packageName)
+            }
+            PendingIntent.getBroadcast(this, 200, pressedIntent, PendingIntent.FLAG_IMMUTABLE)
         }
     }
 
