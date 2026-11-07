@@ -562,12 +562,16 @@ class ForegroundService : Service(), MethodChannel.MethodCallHandler {
         // makes getLaunchIntentForPackage() itself throw a NullPointerException
         // (ComponentName requires a non-null class name). Raising that from
         // onCreate() crashes the whole app with "Unable to create service", so
-        // fall back to the broadcast intent used for the overlay-permission case.
+        // resolve the launcher activity manually, skipping entries with a null
+        // class name. Only if that also fails, fall back to the broadcast intent
+        // used for the overlay-permission case (note: without overlay permission
+        // the Dart-side launchApp can be blocked by background-activity-launch
+        // restrictions, so the manual resolution above is preferred).
         val launchIntent = try {
             pm.getLaunchIntentForPackage(applicationContext.packageName)
         } catch (e: Exception) {
             Log.e(TAG, "getLaunchIntentForPackage", e)
-            null
+            resolveLaunchIntentManually(pm)
         }
         return if (launchIntent != null) {
             PendingIntent.getActivity(this, 200, launchIntent, PendingIntent.FLAG_IMMUTABLE)
@@ -576,6 +580,33 @@ class ForegroundService : Service(), MethodChannel.MethodCallHandler {
                 setPackage(packageName)
             }
             PendingIntent.getBroadcast(this, 200, pressedIntent, PendingIntent.FLAG_IMMUTABLE)
+        }
+    }
+
+    /**
+     * Manual re-implementation of PackageManager.getLaunchIntentForPackage() that
+     * skips resolve results whose activity class name is null (broken OEM ROMs).
+     */
+    private fun resolveLaunchIntentManually(pm: PackageManager): Intent? {
+        return try {
+            val launcherIntent = Intent(Intent.ACTION_MAIN).apply {
+                addCategory(Intent.CATEGORY_LAUNCHER)
+                setPackage(applicationContext.packageName)
+            }
+            val activities = pm.queryIntentActivities(
+                launcherIntent,
+                PackageManager.MATCH_DISABLED_UNTIL_USED_COMPONENTS
+            )
+            val resolved = activities.firstOrNull { !it.activityInfo.name.isNullOrEmpty() }
+                ?: return null
+            Intent(Intent.ACTION_MAIN).apply {
+                addCategory(Intent.CATEGORY_LAUNCHER)
+                setClassName(applicationContext.packageName, resolved.activityInfo.name)
+                flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_RESET_TASK_IF_NEEDED
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "resolveLaunchIntentManually", e)
+            null
         }
     }
 

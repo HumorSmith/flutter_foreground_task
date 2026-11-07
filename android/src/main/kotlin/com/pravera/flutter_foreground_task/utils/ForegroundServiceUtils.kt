@@ -9,6 +9,7 @@ import android.net.Uri
 import android.os.Build
 import android.os.PowerManager
 import android.provider.Settings
+import android.util.Log
 import android.view.WindowManager
 /**
  * Utilities that can be used while the foreground service is running.
@@ -56,7 +57,15 @@ class ForegroundServiceUtils {
 		 */
 		fun launchApp(context: Context, route: String?) {
 			val pm = context.packageManager
-			val launchIntent = pm.getLaunchIntentForPackage(context.packageName)
+			// Some OEM ROMs resolve the launch activity with a null class name,
+			// making getLaunchIntentForPackage() throw a NullPointerException.
+			// See ForegroundService.getPendingIntent for the onCreate() crash.
+			val launchIntent = try {
+				pm.getLaunchIntentForPackage(context.packageName)
+			} catch (e: Exception) {
+				Log.e("ForegroundServiceUtils", "getLaunchIntentForPackage", e)
+				null
+			}
 			if (launchIntent != null) {
 				launchIntent.flags = Intent.FLAG_ACTIVITY_NEW_TASK
 				if (route != null) {
